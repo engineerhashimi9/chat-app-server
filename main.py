@@ -21,8 +21,8 @@ app = Flask(__name__)
 # Configure SECRET_KEY in Render and in your local environment.
 # Do not generate a new key every time the app starts.
 secret_key = os.environ.get("SECRET_KEY")
-if not secret_key:
-    raise RuntimeError("SECRET_KEY environment variable is required.")
+# if not secret_key:
+#     raise RuntimeError("SECRET_KEY environment variable is required.")
 
 app.config["SECRET_KEY"] = secret_key
 
@@ -81,8 +81,7 @@ class Message(db.Model):
         Integer,
         primary_key=True,
     )
-    author_id: Mapped[int] = mapped_column(
-        Integer,
+    author: Mapped[User] = mapped_column(
         db.ForeignKey("users.id"),
         nullable=False,
     )
@@ -105,7 +104,8 @@ class Message(db.Model):
 # --------------------------------------------------
 
 TOKEN_MAX_AGE = int(timedelta(days=1).total_seconds())
-
+# with app.app_context():
+#     db.create_all()
 
 def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(
@@ -345,12 +345,14 @@ def send_message():
 
     # 4. Return the saved message.
     return jsonify(
-        message={
-            "id": message.id,
-            "author_id": message.author_id,
-            "message": message.message,
-        }
+        message=_message_json(message)
     ), 201
+def _message_json(message: Message) -> dict[str, Any]:
+    return {
+        "id": message.id,
+        "author": message.author.name,
+        "message": message.message,
+    }
 @app.get("/api/messages")
 def get_messages():
     messages = db.session.query(Message).all()
