@@ -6,7 +6,7 @@ from typing import Any
 from flask import Flask, Response, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from itsdangerous import BadSignature, URLSafeTimedSerializer
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, ForeignKey
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -53,59 +53,57 @@ class User(db.Model):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
+        Integer, primary_key=True
     )
     name: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
+        String(50), nullable=False
     )
     email: Mapped[str] = mapped_column(
-        String(254),
-        nullable=False,
-        unique=True,
+        String(254), unique=True, nullable=False
     )
     password_hash: Mapped[str] = mapped_column(
-        String(300),
-        nullable=False,
+        String(300), nullable=False
     )
 
-    posts = db.relationship(
+    messages: Mapped[list["Message"]] = db.relationship(
         "Message",
         back_populates="author",
     )
 
 
 class Message(db.Model):
+    __tablename__ = "message"
+
     id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
+        Integer, primary_key=True
     )
-    author: Mapped[User] = mapped_column(
-        db.ForeignKey("users.id"),
+
+    # Foreign-key column
+    author_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
         nullable=False,
     )
 
-    # Keep the old database column name for compatibility.
     message: Mapped[str] = mapped_column(
-        "mesage",
+        "message",
         String(500),
         nullable=False,
     )
 
-    author = db.relationship(
+    # Relationship to the User object
+    author: Mapped["User"] = db.relationship(
         "User",
-        back_populates="posts",
+        back_populates="messages",
     )
 
 
 # --------------------------------------------------
 # Token helpers
 # --------------------------------------------------
-
 TOKEN_MAX_AGE = int(timedelta(days=1).total_seconds())
 # with app.app_context():
 #     db.create_all()
+
 
 def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(
@@ -320,7 +318,7 @@ def send_message():
             error="message is required."
         ), 400
 
-    message_content = message_content
+    message_content = message_content.strip()
 
     if not message_content or len(message_content) > 500:
         return jsonify(
@@ -347,20 +345,33 @@ def send_message():
     return jsonify(
         message=_message_json(message)
     ), 201
+
+
 def _message_json(message: Message) -> dict[str, Any]:
     return {
         "id": message.id,
         "author": message.author.name,
         "message": message.message,
     }
+
+
 @app.get("/api/messages")
 def get_messages():
-    messages = db.session.query(Message).all()
+    if not _authorized_user():
+        return jsonify(
+            error="A valid bearer token is required."
+        ), 401
+    messages = (
+        db.session.query(Message)
+        .order_by(Message.id.asc())
+        .all()
+    )    
     return jsonify(messages=[_message_json(message) for message in messages])
 
 # --------------------------------------------------
 # Current authenticated user
 # --------------------------------------------------
+
 
 @app.get("/api/me")
 def me():
