@@ -351,7 +351,10 @@ def send_message():
             "message": message.message,
         }
     ), 201
-
+@app.get("/api/messages")
+def get_messages():
+    messages = db.session.query(Message).all()
+    return jsonify(messages=[_message_json(message) for message in messages])
 
 # --------------------------------------------------
 # Current authenticated user
