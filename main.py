@@ -47,9 +47,9 @@ class Message(db.Model):
     #
     author = db.relationship("Users", back_populates="posts")
 
-
-with app.app_context():
-    db.create_all()
+# 
+# with app.app_context():
+#     db.create_all()
 
 _TOKEN_MAX_AGE = int(timedelta(days=1).total_seconds())
 
